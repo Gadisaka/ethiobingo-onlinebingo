@@ -1,0 +1,188 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap');
+
+:root {
+  --emerald-dark: #022c22;
+  --emerald-900: #064e3b;
+  --emerald-600: #059669;
+  --emerald-500: #10b981;
+  --emerald-400: #34d399;
+  --emerald-glow: rgba(16, 185, 129, 0.5);
+  --glass-bg: rgba(255, 255, 255, 0.05);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --text-primary: #ecfdf5;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body, html {
+  height: 100%;
+  width: 100%;
+  font-family: 'Outfit', sans-serif;
+  background-color: var(--emerald-dark);
+  color: var(--text-primary);
+  overflow: hidden;
+}
+
+#root {
+  height: 100%;
+  width: 100%;
+}
+
+.lobby-container {
+  height: 100%;
+  width: 100%;
+  background: radial-gradient(circle at 50% 30%, var(--emerald-900), var(--emerald-dark));
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+}
+
+/* Cashier Button - Top Left */
+.cashier-btn {
+  position: absolute;
+  top: 24px;
+  left: 24px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--glass-border);
+  color: var(--emerald-400);
+  padding: 10px 20px;
+  border-radius: 9999px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cashier-btn:hover {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--emerald-500);
+  border-color: var(--emerald-500);
+  box-shadow: 0 0 15px var(--emerald-glow);
+  transform: translateY(-2px);
+}
+
+/* Center Content */
+.center-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 3rem;
+  z-index: 10;
+}
+
+.logo-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.logo-circle {
+  height: 5rem;
+  width: 5rem;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, var(--emerald-400), #14b8a6);
+  border: 3px solid var(--emerald-500);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 15px -3px rgba(16, 185, 129, 0.3), 0 4px 6px -2px rgba(16, 185, 129, 0.3);
+}
+
+.logo-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 9999px;
+  object-fit: cover;
+}
+
+.logo-text {
+  font-size: 4rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: -2px;
+  background: linear-gradient(135deg, #fff 0%, var(--emerald-400) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 30px rgba(16, 185, 129, 0.3));
+}
+
+/* Play Button */
+.play-btn {
+  background: linear-gradient(135deg, var(--emerald-500), var(--emerald-600));
+  color: white;
+  border: none;
+  padding: 20px 60px;
+  font-size: 2rem;
+  font-weight: 900;
+  border-radius: 20px;
+  cursor: pointer;
+  box-shadow: 
+    0 10px 30px -10px var(--emerald-glow),
+    0 4px 0 #047857; /* 3D depth */
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  text-transform: uppercase;
+  position: relative;
+  overflow: hidden;
+}
+
+.play-btn::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+  transition: 0.5s;
+}
+
+.play-btn:hover {
+  transform: translateY(-4px);
+  box-shadow: 
+    0 20px 40px -10px var(--emerald-glow),
+    0 4px 0 #047857;
+}
+
+.play-btn:hover::after {
+  left: 100%;
+  transition: 0.5s;
+}
+
+.play-btn:active {
+  transform: translateY(2px);
+  box-shadow: 0 0 0 #047857;
+}
+
+/* Animations */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+/* Ambient Background Elements */
+.ambient-glow {
+  position: absolute;
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, var(--emerald-900) 0%, transparent 70%);
+  opacity: 0.4;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 0;
+}
