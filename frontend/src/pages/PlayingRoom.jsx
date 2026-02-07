@@ -50,6 +50,76 @@ const isUserHostedRoom = (roomId) => {
   return roomId && roomId.length < 24 && !/^[0-9a-f]{24}$/i.test(roomId);
 };
 
+// WinningCardPreview Component - Shows the winning card with pattern highlighted
+const WinningCardPreview = ({ cartelaId, winningCells = [] }) => {
+  const cardData = bingoCards[cartelaId - 1];
+  if (!cardData) return null;
+
+  // Convert winningCells to a Set for quick lookup
+  // Backend sends: [{row: 0, col: 0}, {row: 0, col: 1}, ...] format
+  // We convert to "row-col" string keys for easy lookup
+  const winningSet = new Set(
+    winningCells.map(cell => {
+      if (typeof cell === 'object' && cell !== null) {
+        return `${cell.row}-${cell.col}`;
+      }
+      return cell; // Fallback for string format
+    })
+  );
+
+  const headerColors = ["#FF6B6B", "#FFD93D", "#6BCB77", "#4D96FF", "#FF85F3"];
+  const columns = ["B", "I", "N", "G", "O"];
+
+  return (
+    <div className="bg-white rounded-2xl p-3 shadow-lg border-2 border-gray-200 w-[220px]">
+      {/* Card Number Label */}
+      <div className="text-center mb-2">
+        <div className="text-sm font-black text-[#1F3B63]">WINNING CARD #{cartelaId}</div>
+      </div>
+      
+      {/* Bingo Grid */}
+      <div className="grid grid-cols-5 gap-1">
+        {/* Header Row */}
+        {columns.map((char, i) => (
+          <div
+            key={`header-${char}`}
+            style={{ backgroundColor: headerColors[i] }}
+            className="h-7 flex items-center justify-center text-white font-black text-sm rounded-md shadow-sm"
+          >
+            {char}
+          </div>
+        ))}
+
+        {/* Card Cells - 5 rows */}
+        {Array.from({ length: 5 }).map((_, rowIdx) =>
+          columns.map((col, colIdx) => {
+            const val = cardData[col][rowIdx];
+            // Create the key in "row-col" format to match backend data
+            const cellKey = `${rowIdx}-${colIdx}`;
+            const isWinningCell = winningSet.has(cellKey);
+            const isFree = val === "FREE";
+
+            return (
+              <div
+                key={cellKey}
+                className={`h-8 flex items-center justify-center text-sm font-bold rounded-md border-2 transition-all ${
+                  isWinningCell
+                    ? "bg-green-500 text-white border-green-600 shadow-[0_0_10px_rgba(34,197,94,0.7)] scale-105"
+                    : isFree
+                    ? "bg-yellow-100 text-yellow-600 border-yellow-300"
+                    : "bg-gray-50 text-gray-700 border-gray-200"
+                }`}
+              >
+                {isFree ? "★" : val}
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+};
+
 const userRoomsSocketRef = { current: null };
 
 const normalizeUserPlayers = (players = []) =>
@@ -1323,6 +1393,18 @@ export default function PlayingRoom() {
               )}
             </div>
 
+            {/* Winning Card Preview */}
+            {gameFinishedData.winner?.cartelaId && (
+              <div className="mb-4">
+                <div className="flex justify-center">
+                  <WinningCardPreview
+                    cartelaId={gameFinishedData.winner.cartelaId}
+                    winningCells={gameFinishedData.winner.winningCells || []}
+                  />
+                </div>
+              </div>
+            )}
+
             <div className="flex flex-col gap-3">
               {isHost ? (
                 <>
@@ -1411,6 +1493,18 @@ export default function PlayingRoom() {
                 </div>
               )}
             </div>
+
+            {/* Winning Card Preview */}
+            {systemWinnerData.winner?.cartelaId && (
+              <div className="mb-4">
+                <div className="flex justify-center">
+                  <WinningCardPreview
+                    cartelaId={systemWinnerData.winner.cartelaId}
+                    winningCells={systemWinnerData.winner.winningCells || []}
+                  />
+                </div>
+              </div>
+            )}
 
             <button
               onClick={handleLeaveGame}

@@ -212,14 +212,16 @@ export default function FriendsWaitingRoom() {
 
         // Update selected cartelas for current user if they were auto-assigned
         const currentUserId = user?._id || user?.id;
-        const myAssignment = assignments.find(
+        // Collect ALL cartela IDs assigned to this user (not just the first one)
+        const myAssignments = assignments.filter(
           (a) => String(a.userId) === String(currentUserId)
         );
-        if (myAssignment) {
-          setSelectedCartelas([myAssignment.cartelaId]);
+        if (myAssignments.length > 0) {
+          const myCartelaIds = myAssignments.map((a) => a.cartelaId).sort((a, b) => a - b);
+          setSelectedCartelas(myCartelaIds);
           setIsSelectionLocked(true);
           console.log(
-            `✅ Auto-assigned cartela #${myAssignment.cartelaId} to you`
+            `✅ Auto-assigned ${myCartelaIds.length} cartela(s) to you: #${myCartelaIds.join(", #")}`
           );
         }
       }
@@ -961,6 +963,18 @@ export default function FriendsWaitingRoom() {
           </button>
         </div>
       </div>
+
+      {/* Blinking reminder for players who haven't selected all their cards */}
+      {selectedCartelas.length < maxAllowedCartelas && !isSelectionLocked && (
+        <div className="text-center flex items-center justify-center gap-3">
+          <span className="inline-block text-amber-400 text-lg font-semibold animate-pulse">
+            ካርቴላ ይምረጡ
+          </span>
+          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-sm font-medium">
+            {selectedCartelas.length}/{maxAllowedCartelas}
+          </span>
+        </div>
+      )}
 
       {selectionError && (
         <div className="rounded-2xl border border-red-500/40 bg-red-500/15 px-5 py-3 text-sm text-red-100 shadow-[0_24px_60px_rgba(248,113,113,0.25)]">

@@ -471,8 +471,6 @@ export default function Friends() {
                     <Users className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-emerald-300" />
                     <input
                       type="number"
-                      min="2"
-                      max="20"
                       value={maxPlayers}
                       onChange={(e) => setMaxPlayers(Number(e.target.value))}
                       className="w-full rounded-2xl border border-emerald-500/40 bg-slate-900/70 pl-12 pr-4 py-3 text-emerald-100 placeholder-emerald-300/40 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-400/40"

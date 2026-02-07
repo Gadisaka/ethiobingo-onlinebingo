@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { Server } from "socket.io";
+import Settings from "../model/settings.js";
 import GameRoom from "../model/gameRooms.js";
 import { checkWinningPattern } from "../utils/patternChecker.js";
 import { bingoCards } from "../utils/bingoCards.js";
@@ -944,60 +945,76 @@ export default function initUserRoomSocket(io) {
                 (id) => !takenCartelaIds.has(id)
               );
 
-              // Find players without any cartelas selected
-              const playersWithoutCartelas = room.players.filter((player) => {
+              // Find players who haven't selected all their paid cartelas
+              const playersNeedingCartelas = [];
+              for (const player of room.players) {
                 const playerId = String(player._id || player.id || player);
-                const hasCartelas = Object.values(roomCartelasObj).some(
+                
+                // Get approved cartela count for this player (default 1)
+                const approvedCount = room.approvedPlayerCartelas?.[playerId] || 1;
+                
+                // Count how many cartelas this player has already selected
+                const currentCount = Object.values(roomCartelasObj).filter(
                   (cartela) => String(cartela.userId) === playerId
-                );
-                return !hasCartelas;
-              });
+                ).length;
+                
+                // Calculate how many more cartelas they need
+                const neededCount = approvedCount - currentCount;
+                
+                if (neededCount > 0) {
+                  playersNeedingCartelas.push({
+                    player,
+                    playerId,
+                    neededCount,
+                    playerName: player.name || player.phoneNumber || playerId,
+                  });
+                }
+              }
 
               console.log(
-                `🔒 Auto-assigning cartelas to ${playersWithoutCartelas.length} player(s)`
+                `🔒 Auto-assigning cartelas to ${playersNeedingCartelas.length} player(s) who haven't selected all their paid cards`
               );
 
-              // Auto-assign available cartelas to players without any (randomly)
+              // Auto-assign available cartelas to players who need them (randomly)
               const assignments = [];
-              for (const player of playersWithoutCartelas) {
-                if (availableCartelas.length === 0) break;
+              for (const { playerId, neededCount, playerName } of playersNeedingCartelas) {
+                // Assign as many cartelas as the player needs and has paid for
+                for (let i = 0; i < neededCount; i++) {
+                  if (availableCartelas.length === 0) break;
 
-                const playerId = String(player._id || player.id || player);
-                const playerName =
-                  player.name || player.phoneNumber || playerId;
+                  // Randomly select from available cartelas
+                  const randomIndex = Math.floor(
+                    Math.random() * availableCartelas.length
+                  );
+                  const assignedCartelaId = availableCartelas.splice(
+                    randomIndex,
+                    1
+                  )[0];
 
-                // Randomly select from available cartelas
-                const randomIndex = Math.floor(
-                  Math.random() * availableCartelas.length
-                );
-                const assignedCartelaId = availableCartelas.splice(
-                  randomIndex,
-                  1
-                )[0];
+                  // Add to in-memory storage
+                  if (!roomCartelas.has(roomId)) {
+                    roomCartelas.set(roomId, {});
+                  }
+                  const currentCartelas = roomCartelas.get(roomId);
+                  currentCartelas[assignedCartelaId] = {
+                    userId: playerId,
+                    userName: playerName,
+                  };
 
-                // Add to in-memory storage
-                if (!roomCartelas.has(roomId)) {
-                  roomCartelas.set(roomId, {});
+                  // Update database
+                  await GameRoom.findByIdAndUpdate(room._id, {
+                    $set: { selectedCartelas: currentCartelas },
+                  });
+
+                  assignments.push({
+                    userId: playerId,
+                    cartelaId: assignedCartelaId,
+                  });
+
+                  console.log(
+                    `✅ Auto-assigned cartela #${assignedCartelaId} to ${playerName} (${i + 1}/${neededCount})`
+                  );
                 }
-                const currentCartelas = roomCartelas.get(roomId);
-                currentCartelas[assignedCartelaId] = {
-                  userId: playerId,
-                  userName: playerName,
-                };
-
-                // Update database
-                await GameRoom.findByIdAndUpdate(room._id, {
-                  $set: { selectedCartelas: currentCartelas },
-                });
-
-                assignments.push({
-                  userId: playerId,
-                  cartelaId: assignedCartelaId,
-                });
-
-                console.log(
-                  `✅ Auto-assigned cartela #${assignedCartelaId} to ${playerName}`
-                );
               }
 
               // Broadcast assignments and lock selection
@@ -1079,6 +1096,7 @@ export default function initUserRoomSocket(io) {
                       players: room.players,
                       winner: null,
                       hostUserId: room.hostUserId,
+                      cashierId: room.hostUserId,
                       stake: room.stake,
                       gameStatus: "playing",
                       max_players: room.max_players,
@@ -1558,6 +1576,7 @@ export default function initUserRoomSocket(io) {
                     players: room.players,
                     winner: null,
                     hostUserId: room.hostUserId,
+                    cashierId: room.hostUserId,
                     stake: room.stake,
                     gameStatus: "cancelled",
                     max_players: room.max_players,
@@ -2183,27 +2202,43 @@ export default function initUserRoomSocket(io) {
         console.log("Bingo check result:", result);
 
         if (result.isWinner && result.status === "win") {
-          // Winner! Update the room and broadcast
-          let userName = cartelaOwner.userName;
+          // Winner! Optimize logic to emit as fast as possible
           
-          // If stored userName looks like an ID, try to get the real name
-          const looksLikeId = !userName || 
-            userName === "Unknown" || 
-            /^[a-f0-9]{24}$/i.test(userName) || 
-            /^\d{10,}$/.test(userName) ||
-            userName.startsWith("Player ");
-            
-          if (looksLikeId) {
-            try {
-              const userDoc = await User.findById(userId);
-              if (userDoc) {
-                userName = userDoc.name || userDoc.username || userDoc.phoneNumber || userDoc.email || userName;
-                console.log(`Winner name fetched from User collection: ${userName}`);
-              }
-            } catch (userErr) {
-              console.log(`Could not fetch winner name: ${userErr.message}`);
-            }
+          // 1. Fetch data needed for immediate display (Winner Name, WinCut %, Bonus Config)
+          let userDoc = null;
+          let cashierUser = null;
+          let bonusConfig = null;
+
+          try {
+             const results = await Promise.all([
+                // Winner Info
+                User.findById(userId).select("name username phoneNumber email"),
+                // Cashier Info for WinCut
+                (room.cashierId || room.hostUserId) ? User.findById(room.cashierId || room.hostUserId).select("winCut") : Promise.resolve(null),
+                // Bonus Config
+                room.hostUserId ? BonusConfig.findOne({ cashierId: room.hostUserId, isActive: true }) : Promise.resolve(null)
+             ]);
+             userDoc = results[0];
+             cashierUser = results[1];
+             bonusConfig = results[2];
+          } catch (fetchErr) {
+             console.error("Error parallel fetching winner data:", fetchErr);
+             // Continue with best effort
           }
+
+          // Resolve Winner Name
+          let userName = cartelaOwner.userName;
+          try {
+            const looksLikeId = !userName || 
+                userName === "Unknown" || 
+                /^[a-f0-9]{24}$/i.test(userName) || 
+                /^\d{10,}$/.test(userName) ||
+                userName.startsWith("Player ");
+                
+            if (looksLikeId && userDoc) {
+                userName = userDoc.name || userDoc.username || userDoc.phoneNumber || userDoc.email || userName;
+            }
+          } catch (e) { console.error("Error resolving name", e); }
           
           const winnerData = {
             userId: String(userId),
@@ -2212,251 +2247,157 @@ export default function initUserRoomSocket(io) {
             winningCells: result.winningCells,
           };
 
+          // Calculate Prize (Memory)
+          const totalSelectedCartelas = Object.keys(roomCartelas.get(roomId) || {}).length;
+          const rawPot = typeof room.stake === "number" ? room.stake * totalSelectedCartelas : 0;
+          
+          let winCutPercent = 10;
+          if (cashierUser && cashierUser.winCut != null) {
+            winCutPercent = Number(cashierUser.winCut);
+          }
+          const prizeAmount = Math.max(0, rawPot - (rawPot * winCutPercent) / 100);
+
+          // Calculate Bonus (Memory from config)
+          let bonusAmount = 0;
+          if (bonusConfig && bonusConfig.bonuses && bonusConfig.bonuses.length > 0) {
+            const sortedBonuses = [...bonusConfig.bonuses].sort((a, b) => a.maxCalls - b.maxCalls);
+            // using find instead of for loop
+            const tier = sortedBonuses.find(t => calledNumbers.length <= t.maxCalls);
+            if (tier) bonusAmount = tier.amount;
+          }
+          if (bonusAmount > 0) {
+            console.log(`🎁 Bonus awarded: ${bonusAmount} Birr for winning in ${calledNumbers.length} calls`);
+          }
+
+          // 2. Lock Room (Critical DB Write)
           room.winner = winnerData;
           room.gameStatus = "finished";
           await room.save();
 
-          console.log("🎉 Winner found:", winnerData);
+          console.log("🎉 Winner found (Optimized):", winnerData);
 
-          // Compute prize based on total selected cartelas in the room, minus win cut
-          const totalSelectedCartelas = Object.keys(
-            roomCartelas.get(roomId) || {}
-          ).length;
-          const rawPot =
-            typeof room.stake === "number"
-              ? room.stake * totalSelectedCartelas
-              : 0;
+          // 3. EMIT IMMEDIATELY
+          const emitPayload = {
+            roomId,
+            winner: winnerData,
+            prize: prizeAmount,
+            pointsAwarded: {}, // Points processed in background
+            bonusAmount,
+            callCount: calledNumbers.length,
+          };
+          
+          userRoomNamespace.to(roomId).emit("bingo-winner", emitPayload);
+          userRoomNamespace.to(roomId).emit("game-finished", emitPayload);
 
-          // Apply cashier's win cut (from their user profile)
-          let prizeAmount = rawPot;
-          try {
-            // Get the cashier/host user to retrieve their specific win cut
-            const cashierUserId = room.cashierId || room.hostUserId;
-            let winCutPercent = 10; // Default 10% if not found
-            
-            if (cashierUserId) {
-              const cashierUser = await User.findById(cashierUserId);
-              if (cashierUser && cashierUser.winCut !== undefined && cashierUser.winCut !== null) {
-                winCutPercent = Number(cashierUser.winCut);
-              }
-            }
-            
-            prizeAmount = Math.max(0, rawPot - (rawPot * winCutPercent) / 100);
-            console.log(
-              `💰 Prize calculation: rawPot=${rawPot}, cashierWinCut=${winCutPercent}%, netPrize=${prizeAmount}`
-            );
-          } catch (settingsErr) {
-            console.error(
-              "[winCut] Failed to get cashier's win cut, using full pot:",
-              settingsErr.message
-            );
-            // Default to no cut on failure
+          // 4. Stop Calling
+          if (calledNumbersIntervalByUserRoom[roomId]) {
+            clearInterval(calledNumbersIntervalByUserRoom[roomId]);
+            delete calledNumbersIntervalByUserRoom[roomId];
           }
 
-          let pointsAwarded = {};
-
-          // Record game history (finished with winner)
-          try {
-            const exists = await GameHistory.findOne({
-              roomId: room._id,
-              gameType: "user",
-              gameStatus: "finished",
-            });
-            if (!exists) {
-              try {
+          // 5. Background Processing (History, Wallet, Points, Revenue)
+          // Run in background without awaiting
+          (async () => {
+             try {
+                // Award Points
                 const participantIds = Array.isArray(room.players)
-                  ? room.players.map((p) =>
-                      String(p?._id || p?.id || p?.userId || p)
-                    )
+                  ? room.players.map((p) => String(p?._id || p?.id || p?.userId || p))
                   : [];
+                
                 const awardResult = await awardGamePoints({
                   playerIds: participantIds,
                   winnerId: String(userId),
                   gameType: "user",
                   roomId,
                 });
-                pointsAwarded = awardResult?.awarded || {};
-              } catch (pointsErr) {
-                console.error(
-                  "[points] award error (user room winner):",
-                  pointsErr.message
-                );
-              }
-              // Credit winner's wallet once
-              if (prizeAmount > 0) {
-                try {
-                  await creditPrizeToUserWinner(
-                    String(userId),
-                    prizeAmount,
-                    roomId
-                  );
-                } catch (walletErr) {
-                  console.error(
-                    "[wallet] Prize credit error (user room finished):",
-                    walletErr.message
-                  );
+                
+                // Credit Prize
+                if (prizeAmount > 0) {
+                  await creditPrizeToUserWinner(String(userId), prizeAmount, roomId);
                 }
-              }
-              // Prefer updating existing 'playing' history to avoid duplicates
-              const playingHistory = await GameHistory.findOne({
-                roomId: room._id,
-                gameType: "user",
-                gameStatus: "playing",
-              });
-              if (playingHistory) {
-                playingHistory.gameStatus = "finished";
-                playingHistory.winner = winnerData;
-                playingHistory.prize = prizeAmount;
-                await playingHistory.save();
-                console.log("✅ Game history updated from playing → finished");
-              } else {
-                await GameHistory.create({
-                  roomId: room._id,
-                  gameType: "user",
-                  players: room.players,
-                  winner: winnerData,
-                  hostUserId: room.hostUserId,
-                  stake: room.stake,
-                  prize: prizeAmount,
-                  gameStatus: "finished",
-                  max_players: room.max_players,
+
+                // Game History
+                const exists = await GameHistory.findOne({
+                   roomId: room._id,
+                   gameType: "user",
+                   gameStatus: "finished",
                 });
-                console.log("✅ Game history saved (finished)");
-              }
-
-              // Always credit host share on game end (with winner)
-              try {
-                const settings = await Settings.getSettings();
-                const hostSharePercent =
-                  Number(settings?.userGames?.hostShare) >= 0
-                    ? Number(settings.userGames.hostShare)
-                    : 0;
-                const totalSelectedCartelasForHost = Object.keys(
-                  roomCartelas.get(roomId) || {}
-                ).length;
-                const pot =
-                  typeof room.stake === "number"
-                    ? room.stake * totalSelectedCartelasForHost
-                    : 0;
-                const hostShareAmount = Math.max(
-                  0,
-                  (pot * hostSharePercent) / 100
-                );
-                if (
-                  hostShareAmount > 0 &&
-                  room.hostUserId &&
-                  String(room.hostUserId).length > 0
-                ) {
-                  const hostWallet = await Wallet.findOne({
-                    user: String(room.hostUserId),
-                  });
-                  if (hostWallet) {
-                    hostWallet.balance =
-                      (hostWallet.balance || 0) + hostShareAmount;
-                    await hostWallet.save();
-                  } else {
-                    await Wallet.create({
-                      user: String(room.hostUserId),
-                      balance: hostShareAmount,
-                      bonus: 0,
-                    });
-                  }
+                
+                if (!exists) {
+                   const playingHistory = await GameHistory.findOne({
+                      roomId: room._id,
+                      gameType: "user",
+                      gameStatus: "playing",
+                   });
+                   if (playingHistory) {
+                      playingHistory.gameStatus = "finished";
+                      playingHistory.winner = winnerData;
+                      playingHistory.prize = prizeAmount;
+                      await playingHistory.save();
+                      console.log("✅ Game history updated from playing → finished");
+                   } else {
+                      await GameHistory.create({
+                        roomId: room._id,
+                        gameType: "user",
+                        players: room.players,
+                        winner: winnerData,
+                        hostUserId: room.hostUserId,
+                        cashierId: room.hostUserId,
+                        stake: room.stake,
+                        prize: prizeAmount,
+                        gameStatus: "finished",
+                        max_players: room.max_players,
+                      });
+                      console.log("✅ Game history saved (finished)");
+                   }
                 }
-              } catch (hostErr) {
-                console.error(
-                  "[wallet] Host share credit error (user room finished):",
-                  hostErr.message
-                );
-              }
 
-              // Ensure win-cut revenue exists (if stake-debit stage missed it)
-              try {
+                // Host Share
+                const settings = await Settings.getSettings(); // Fetch settings
+                const hostSharePercent = Number(settings?.userGames?.hostShare) >= 0 ? Number(settings.userGames.hostShare) : 0;
+                
+                // Host share is based on pot, same calculation
+                const potForHost = rawPot; 
+                const hostShareAmount = Math.max(0, (potForHost * hostSharePercent) / 100);
+
+                if (hostShareAmount > 0 && room.hostUserId) {
+                   const hostWallet = await Wallet.findOne({ user: String(room.hostUserId) });
+                   if (hostWallet) {
+                      hostWallet.balance = (hostWallet.balance || 0) + hostShareAmount;
+                      await hostWallet.save();
+                   } else {
+                      await Wallet.create({ user: String(room.hostUserId), balance: hostShareAmount, bonus: 0 });
+                   }
+                }
+                
+                // Revenue Logging
                 const roomKey = room?.roomId || String(room?._id || "");
                 if (roomKey) {
-                  const existsRevenue = await Revenue.findOne({
-                    gameRoom: roomKey,
-                    reason: "user_game_win_cut",
-                  });
-                  if (!existsRevenue) {
-                    const settings = await Settings.getSettings();
-                    const winCutPercent =
-                      Number(settings?.userGames?.winCut) >= 0
-                        ? Number(settings.userGames.winCut)
-                        : 0;
-                    const totalSelectedCartelasForCut = Object.keys(
-                      roomCartelas.get(roomId) || {}
-                    ).length;
-                    const pot =
-                      typeof room.stake === "number"
-                        ? room.stake * totalSelectedCartelasForCut
-                        : 0;
-                    const amount = Math.max(0, (pot * winCutPercent) / 100);
-                    await Revenue.create({
-                      amount,
-                      gameRoom: roomKey,
-                      stake: room.stake,
-                      players: room.players,
-                      winner: winnerData,
-                      reason: "user_game_win_cut",
-                    });
-                  }
+                   // Ensure Win Cut Revenue
+                   const winCutExists = await Revenue.findOne({ gameRoom: roomKey, reason: "user_game_win_cut" });
+                   if (!winCutExists) {
+                      const cutAmount = Math.floor((rawPot * winCutPercent) / 100); // use same logic as prize
+                      
+                      await Revenue.create({
+                        amount: cutAmount,
+                        gameRoom: roomKey,
+                        stake: room.stake,
+                        players: room.players,
+                        winner: winnerData,
+                        reason: "user_game_win_cut",
+                      });
+                   }
                 }
-              } catch (revErr) {
-                console.error(
-                  "[revenue] Failed to ensure user-game win-cut revenue (winner):",
-                  revErr.message
-                );
-              }
-            }
-          } catch (historyErr) {
-            console.error(
-              "[userRoomSocket] Game history save error:",
-              historyErr.message
-            );
-          }
-
-          // Calculate bonus based on number of calls
-          let bonusAmount = 0;
-          try {
-            if (room.hostUserId) {
-              bonusAmount = await BonusConfig.calculateBonus(
-                String(room.hostUserId),
-                calledNumbers.length
-              );
-              if (bonusAmount > 0) {
-                console.log(
-                  `🎁 Bonus awarded: ${bonusAmount} Birr for winning in ${calledNumbers.length} calls`
-                );
-              }
-            }
-          } catch (bonusErr) {
-            console.error("[bonus] Calculation error:", bonusErr.message);
-          }
-
-          userRoomNamespace.to(roomId).emit("bingo-winner", {
-            roomId,
-            winner: winnerData,
-            prize: prizeAmount,
-            pointsAwarded,
-            bonusAmount,
-            callCount: calledNumbers.length,
-          });
-
-          // Emit explicit game-finished event for user-hosted games
-          userRoomNamespace.to(roomId).emit("game-finished", {
-            roomId,
-            winner: winnerData,
-            prize: prizeAmount,
-            pointsAwarded,
-            bonusAmount,
-            callCount: calledNumbers.length,
-          });
-
-          // Stop number calling and cleanup game data for this room
-          if (calledNumbersIntervalByUserRoom[roomId]) {
-            clearInterval(calledNumbersIntervalByUserRoom[roomId]);
-            delete calledNumbersIntervalByUserRoom[roomId];
-          }
+                
+             } catch (bgErr) {
+                console.error("[userRoomSocket] Background processing error for game finish:", bgErr);
+             }
+          })(); 
+          // End background processing
+          
+          // Legacy interval cleanup block (matched by EndLine) is replaced by logic above
+          // We need to ensure surrounding logic is correct
+          // Since we consumed the 'cleanup' calls in step 4 above, we don't need them again.
           // Note: We keep calledNumbersByUserRoom and roomCartelas for history/display
           // They will be cleaned up when the room is deleted
         } else if (result.isWinner && result.status === "not_now") {
@@ -2598,6 +2539,7 @@ async function startNumberCallingInterval(
                 players: room.players,
                 winner: null,
                 hostUserId: room.hostUserId,
+                cashierId: room.hostUserId,
                 stake: room.stake,
                 prize: 0,
                 gameStatus: "finished",
