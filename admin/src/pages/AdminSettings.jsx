@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import axios from "axios";
+import { API_URL } from "../constant";
 import {
   Settings,
   Gift,
@@ -23,7 +24,6 @@ import {
   Link as LinkIcon,
 } from "lucide-react";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function AdminSettings() {
   const { user } = useAuth();
