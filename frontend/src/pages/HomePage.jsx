@@ -12,8 +12,6 @@ import { useMemo } from "react";
 // import logo from "../assets/logo.png";
 import WalletBadge from "../components/WalletBadge";
 
-// sky
-
 export default function HomePage() {
   // Generate star positions once
   const stars = useMemo(() => {
@@ -64,7 +62,7 @@ export default function HomePage() {
           className="w-[300px] h-[170px] object-contain drop-shadow-[0_0_40px_rgba(56,189,248,0.4)]"
         /> */}
         {/* <h1 className="text-4xl md:text-5xl font-extrabold tracking-wide text-sky-400 mt-4">
-          Sky Bingo
+          Kiya
         </h1> */}
       </div>
 
@@ -91,7 +89,7 @@ export default function HomePage() {
 
       {/* === Footer === */}
       <div className="absolute bottom-6 text-sm text-sky-400/70 z-10">
-        © 2025 Sky Bingo
+        © 2026 Kiya
       </div>
     </div>
   );

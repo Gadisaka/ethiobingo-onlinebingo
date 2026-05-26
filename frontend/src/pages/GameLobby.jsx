@@ -325,7 +325,7 @@ export default function GameLobby() {
               ) : (
                 <span className="inline-flex items-center gap-2">
                   <Sparkles className="h-4 w-4 text-sky-300" />
-                  Choose a stake to join the busiest rooms in BANI Bingo.
+                  Choose a stake to join the busiest rooms in Kiya.
                 </span>
               )}
             </div>

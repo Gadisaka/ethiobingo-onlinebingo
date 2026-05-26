@@ -24,7 +24,7 @@ export default function InviteModal() {
 
   const referralCode =
     user?.referralNumber ||
-    `sky-bingo-${user?.phoneNumber?.slice(-4) || "2025"}`;
+    `kiya-${user?.phoneNumber?.slice(-4) || "2025"}`;
 
   const handleCopy = async () => {
     try {

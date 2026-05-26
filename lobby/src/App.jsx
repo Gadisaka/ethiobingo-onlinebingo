@@ -1,15 +1,10 @@
-import { useState } from 'react'
-import './App.css'
-import logo from './ethiobingo.jpg'
-
-
-
+import { useState } from "react";
+import "./App.css";
+import logo from "./ethiobingo.jpg";
 
 function App() {
-
- const ADMIN_LINK = "https://ethiobingo.vercel.app/"
-
- const MOBILE_LINK = "https://play-ethiobingo.vercel.app/"
+  const ADMIN_LINK = "https://admin.kiya.goldbingo.net/";
+  const MOBILE_LINK = "https://game.kiya.goldbingo.net/";
 
   return (
     <div className="lobby-container">
@@ -17,7 +12,10 @@ function App() {
       <div className="ambient-glow"></div>
 
       {/* Top Left Cashier Button */}
-      <button className="cashier-btn" onClick={() => window.open(ADMIN_LINK, '_blank')}>
+      <button
+        className="cashier-btn"
+        onClick={() => window.open(ADMIN_LINK, "_blank")}
+      >
         <span className="icon">💰</span> Cashier
       </button>
 
@@ -30,12 +28,15 @@ function App() {
           <h1 className="logo-text">Ethio Bingo</h1>
         </div>
 
-        <button className="play-btn" onClick={() => window.open(MOBILE_LINK, '_blank')}>
+        <button
+          className="play-btn"
+          onClick={() => window.open(MOBILE_LINK, "_blank")}
+        >
           Play
         </button>
       </div>
     </div>
-  )
+  );
 }
 
-export default App
+export default App;

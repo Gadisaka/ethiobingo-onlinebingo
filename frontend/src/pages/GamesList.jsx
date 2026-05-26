@@ -250,10 +250,10 @@ export default function GamesPage() {
           </div>
           <div className="hidden sm:block">
             <div className="text-xl font-black tracking-wide text-white">
-              <span className="text-sky-400">GAMES</span>
+              <span className="text-sky-400">KIYA</span>
             </div>
             <div className="text-xs text-sky-200/60 font-medium tracking-wider">
-              THE FUTURE OF GAMING
+              ONLINE BINGO
             </div>
           </div>
         </div>
@@ -434,7 +434,7 @@ export default function GamesPage() {
 
       {/* Simple footer */}
       <footer className="border-t border-white/5 bg-slate-950 py-8 px-6 text-center text-slate-500 text-sm relative z-10">
-        <p>&copy; 2025 Sky Games Platform. All rights reserved.</p>
+        <p>&copy; 2025 Kiya. All rights reserved.</p>
       </footer>
 
       {user && <BottomNavbar />}
