@@ -20,33 +20,19 @@ const seedAdmin = async () => {
       points: 1000,
     };
 
-    // Check if admin already exists
-    const existingAdmin = await User.findOne({
+    // Replace any existing admin user(s)
+    const deleteResult = await User.deleteMany({
       $or: [{ phoneNumber: adminData.phoneNumber }, { role: "admin" }],
     });
 
-    if (existingAdmin) {
-      console.log("👤 Admin user already exists:");
-      console.log(`  - Name: ${existingAdmin.name}`);
-      console.log(`  - Phone: ${existingAdmin.phoneNumber}`);
-      console.log(`  - Role: ${existingAdmin.role || "user"}`);
-      console.log(`  - ID: ${existingAdmin._id}`);
-
-      // Update role if it's not admin
-      if (existingAdmin.role !== "admin") {
-        existingAdmin.role = "admin";
-        await existingAdmin.save();
-        console.log("✅ Updated user role to admin");
-      }
-
-      return;
+    if (deleteResult.deletedCount > 0) {
+      console.log(`🗑️  Removed ${deleteResult.deletedCount} existing admin user(s)`);
     }
 
-    // Create admin user
     const admin = new User(adminData);
     await admin.save();
 
-    console.log("🌱 Admin user created successfully!");
+    console.log("🌱 Admin user seeded successfully!");
     console.log(`  - Name: ${admin.name}`);
     console.log(`  - Phone: ${admin.phoneNumber}`);
     console.log(`  - PIN: ${adminData.pin}`);
