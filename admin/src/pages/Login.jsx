@@ -97,10 +97,10 @@ const Login = () => {
             </button>
           </div>
 
-          <div className="text-center text-xs text-gray-400">
+          {/* <div className="text-center text-xs text-gray-400">
             <p>Admin: 0911223344 / admin123</p>
             <p>Use phone number and PIN to login</p>
-          </div>
+          </div> */}
         </form>
       </div>
     </div>
