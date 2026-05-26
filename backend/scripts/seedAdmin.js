@@ -12,6 +12,7 @@ const seedAdmin = async () => {
     const adminData = {
       name: "Admin",
       phoneNumber: "0920304050",
+      email: "admin@system.local",
       pin: "admin123",
       role: "admin",
       isVerified: true,
@@ -19,6 +20,23 @@ const seedAdmin = async () => {
       balance: 0,
       points: 1000,
     };
+
+    // Drop legacy unique email index (schema no longer uses email)
+    try {
+      const indexes = await User.collection.indexes();
+      const hasLegacyEmailIndex = indexes.some(
+        (idx) => idx.name === "email_1" && idx.key?.email,
+      );
+
+      if (hasLegacyEmailIndex) {
+        await User.collection.dropIndex("email_1");
+        console.log("🧹 Dropped legacy email_1 index");
+      }
+    } catch (indexError) {
+      if (indexError.code !== 27) {
+        console.warn("⚠️  Could not drop legacy email_1 index:", indexError.message);
+      }
+    }
 
     // Replace any existing admin user(s)
     const deleteResult = await User.deleteMany({
@@ -44,7 +62,8 @@ const seedAdmin = async () => {
   } catch (error) {
     console.error("❌ Error seeding admin user:", error);
     if (error.code === 11000) {
-      console.error("   Duplicate phone number detected");
+      const field = Object.keys(error.keyPattern || {})[0] || "unknown field";
+      console.error(`   Duplicate key on: ${field}`);
     }
   } finally {
     process.exit(0);
