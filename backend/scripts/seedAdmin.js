@@ -11,7 +11,7 @@ const seedAdmin = async () => {
     // Admin user configuration
     const adminData = {
       name: "Admin",
-      phoneNumber: "0911223344",
+      phoneNumber: "0920304050",
       pin: "admin123",
       role: "admin",
       isVerified: true,
@@ -26,7 +26,9 @@ const seedAdmin = async () => {
     });
 
     if (deleteResult.deletedCount > 0) {
-      console.log(`🗑️  Removed ${deleteResult.deletedCount} existing admin user(s)`);
+      console.log(
+        `🗑️  Removed ${deleteResult.deletedCount} existing admin user(s)`,
+      );
     }
 
     const admin = new User(adminData);
